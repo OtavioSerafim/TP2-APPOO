@@ -72,19 +72,18 @@ class MusicSelectScene(BaseScene):
                 csv_file = list(song_folder.glob("*.csv"))
                 mp3_file = list(song_folder.glob("*.mp3"))
 
-            # Se ambos existirem e só um de cada, a música é válida
-            if len(csv_file) == 1 and len(mp3_file) == 1:
-                song_data = {
-                    "title": song_folder.name,
-                    "csv_path": csv_file[0],
-                    "mp3_path": mp3_file[0]
-                }
-            else:
-                print(f"A música {song_folder.name} é inválida (verifique os arquivos csv e mp3!)")
-
-            # Adiciona à lista de músicas válidas
-            song_list.append(song_data)
-            print(f"Música encontrada: {song_data['title']}")
+                # Se ambos existirem e só um de cada, a música é válida
+                if len(csv_file) == 1 and len(mp3_file) == 1:
+                    song_data = {
+                        "title": song_folder.name,
+                        "csv_path": csv_file[0],
+                        "mp3_path": mp3_file[0]
+                    }
+                    # Adiciona à lista de músicas válidas
+                    song_list.append(song_data)
+                    print(f"Música encontrada: {song_data['title']}")
+                else:
+                    print(f"Pasta '{song_folder.name}' ignorada: requer 1 CSV e 1 MP3")
 
         if len(song_list) == 0:
             print("Nenhuma música válida encontrada!")
@@ -100,6 +99,7 @@ class MusicSelectScene(BaseScene):
         try:
             song = self.songs[self.selected_index]
             pygame.mixer.music.load(song['mp3_path'])
+            pygame.mixer.music.set_volume(0.1)
             pygame.mixer.music.play(loops = 0, start = 30.0, fade_ms = 500)
         
         except pygame.error as e:
@@ -122,7 +122,7 @@ class MusicSelectScene(BaseScene):
                 self._on_song_selected()
 
             elif event.key == pygame.K_ESCAPE: # Voltar para o menu
-                self.app.set_scene(self.app.menu_scene) # (Veja Etapa 2)
+                self._on_home_selected()
 
 
     def update(self, dt: float) -> None:
