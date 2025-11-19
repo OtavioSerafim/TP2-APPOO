@@ -138,11 +138,35 @@ class MusicSelectScene(BaseScene):
 
         # Preview (esquerda)
         preview_panel_rect = pygame.Rect(0, 0, width // 2, height)
-        self.render_preview(surface.subsurface(preview_panel_rect))
+        preview_surface = surface.subsurface(preview_panel_rect)
+        self.render_preview(preview_surface)
+        # pygame.draw.rect(surface, (255, 0, 0), preview_panel_rect, 3)
 
         # Músicas (direita)
         music_selection_rect = pygame.Rect(width // 2, 0, width // 2, height)
-        self.render_music_list(surface.subsurface(music_selection_rect))
+        music_surface = surface.subsurface(music_selection_rect)
+        self.render_music_list(music_surface)
+        # pygame.draw.rect(surface, (0, 0, 255), music_selection_rect, 3)
+
+    def _wrap_text(self, text: str, font: pygame.font.Font, max_width: int) -> list[str]:
+        """Quebra o texto em múltiplas linhas se exceder a largura máxima."""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            if font.size(test_line)[0] <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines if lines else [text]
 
     def render_preview(self, surface: pygame.Surface) -> None:
         """Renderiza pré-visualização da música selecionada"""
@@ -153,31 +177,46 @@ class MusicSelectScene(BaseScene):
         
         song = self.songs[self.selected_index]
 
-        # Titulo
-        title_txt = self.title_font.render(song["title"], True, COLOR_PRIMARY)
-        title_pos = (surface.get_width() // 4, surface.get_height() * 0.3)
-        surface.blit(title_txt, title_txt.get_rect(center=title_pos))
+        # Quebra o título se necessário
+        max_width = surface.get_width() * 0.9  # 90% da largura
+        lines = self._wrap_text(song["title"], self.title_font, max_width)
+        
+        # Calcula altura total do texto
+        line_height = self.title_font.get_linesize()
+        total_height = len(lines) * line_height
+        start_y = (surface.get_height() - total_height) // 2
+        
+        # Renderiza cada linha centralizada
+        for i, line in enumerate(lines):
+            title_txt = self.title_font.render(line, True, COLOR_PRIMARY)
+            y_pos = start_y + i * line_height
+            x_pos = (surface.get_width() - title_txt.get_width()) // 2
+            surface.blit(title_txt, (x_pos, y_pos))
 
     def render_music_list(self, surface: pygame.Surface) -> None:
         """Renderiza painel de seleção das músicas"""
-        start_y = 100 # Posição Y inicial da lista
-        line_height = 50 # Espaço entre cada música
+        line_height = 50
+        total_height = len(self.songs) * line_height
+        start_y = (surface.get_height() - total_height) // 2
+        max_width = surface.get_width() * 0.85  # 85% da largura
 
         for index, song in enumerate(self.songs):
             is_selected = (index == self.selected_index)
-
             color = COLOR_PRIMARY if is_selected else COLOR_TEXT
-
-            # Adiciona "> " no título da música selecionada
             prefix = "> " if is_selected else "  "
-            text = prefix + song["title"]
-
+            
+            # Quebra o texto se necessário
+            full_text = prefix + song["title"]
+            lines = self._wrap_text(full_text, self.button_font, max_width)
+            
+            # Renderiza apenas a primeira linha
+            text = lines[0] if lines else full_text
+            if len(lines) > 1:
+                text += "..."  # Indica que há mais texto
+            
             txt_render = self.button_font.render(text, True, color)
-
-            # Centraliza o texto
             pos_x = surface.get_width() * 0.1
             pos_y = start_y + index * line_height
-
             surface.blit(txt_render, (pos_x, pos_y))
 
     def _on_song_selected(self) -> None:
