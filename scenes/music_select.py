@@ -227,7 +227,8 @@ class MusicSelectScene(BaseScene):
         pygame.mixer.music.stop() # Para preview
 
         song = self.songs[self.selected_index]
-        # TODO: fazer direcionamento para a tela de jogo
+        from .gameplay import GameplayScene
+        self.app.change_scene(GameplayScene(self.app)) # Alterna para a cena de jogo
 
     def _on_home_selected(self) -> None:
         """Volta para o menu principal"""
