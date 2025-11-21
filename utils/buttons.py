@@ -4,21 +4,28 @@ from typing import Callable
 
 import pygame
 
+from .constants import (
+    COLOR_BUTTON_BACKGROUND,
+    COLOR_BUTTON_BACKGROUND_HOVER,
+    COLOR_BUTTON_BORDER,
+    COLOR_TEXT,
+)
+
 
 class ButtonTheme:
     """Agrupa cores utilizadas pelos botões."""
 
     def __init__(
         self,
-        background: tuple[int, int, int],
-        background_hover: tuple[int, int, int],
-        border: tuple[int, int, int],
-        text: tuple[int, int, int],
+        background: tuple[int, int, int] | None = None,
+        background_hover: tuple[int, int, int] | None = None,
+        border: tuple[int, int, int] | None = None,
+        text: tuple[int, int, int] | None = None,
     ) -> None:
-        self.background = background
-        self.background_hover = background_hover
-        self.border = border
-        self.text = text
+        self.background = background or COLOR_BUTTON_BACKGROUND
+        self.background_hover = background_hover or COLOR_BUTTON_BACKGROUND_HOVER
+        self.border = border or COLOR_BUTTON_BORDER
+        self.text = text or COLOR_TEXT
 
 
 class Button:
