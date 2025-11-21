@@ -26,6 +26,17 @@ class GameplayScene(BaseScene):
         pygame.draw.line(surface, (255, 255, 255), (0, lane_top), (width - 1, lane_top), border_thickness)
         pygame.draw.line(surface, (255, 255, 255), (0, lane_bottom - 1), (width - 1, lane_bottom - 1), border_thickness)
 
+        # hit area
+        hit_radius = 80
+        hit_center_x = 300
+        hit_center_y = lane_bottom - 100
+
+        # superfície com alpha para efeito semi-transparente
+        hit_surf = pygame.Surface((hit_radius * 2, hit_radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(hit_surf, (255, 255, 255, 40), (hit_radius, hit_radius), hit_radius)           # hit area interna
+        pygame.draw.circle(hit_surf, (255, 255, 255, 160), (hit_radius, hit_radius), 2 * hit_radius // 3) # núcleo
+        surface.blit(hit_surf, (hit_center_x - hit_radius, hit_center_y - hit_radius))
+
     def handle_event(self, event: pygame.event.Event) -> None:
         pass
 
