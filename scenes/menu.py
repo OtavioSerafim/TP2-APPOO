@@ -19,12 +19,7 @@ class MenuScene(BaseScene):
         self.title_font = pygame.font.Font(None, 82)
         self.subtitle_font = pygame.font.Font(None, 36)
         self.button_font = pygame.font.Font(None, 42)
-        self.theme = ButtonTheme(
-            background=(42, 52, 71),
-            background_hover=(70, 92, 141),
-            border=(20, 28, 43),
-            text=COLOR_TEXT,
-        )
+        self.theme = ButtonTheme()
         self.buttons = self._build_buttons()
         self._title_pos = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3)
         self._subtitle_pos = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3 + 60)
