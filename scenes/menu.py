@@ -3,15 +3,10 @@
 import pygame
 
 from .base import BaseScene
+from .music_select import MusicSelectScene
+from utils.constants import COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_MUTED, SCREEN_WIDTH, SCREEN_HEIGHT
 from utils.buttons import Button, ButtonTheme
 
-COLOR_BACKGROUND = (18, 18, 18)
-COLOR_PRIMARY = (235, 218, 168)
-COLOR_TEXT = (240, 240, 245)
-COLOR_TEXT_MUTED = (160, 160, 168)
-
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
 SUBTITLE_TEXT = "Pressione um botão para começar"
 
 
@@ -96,8 +91,8 @@ class MenuScene(BaseScene):
             button.draw(surface)
 
     def _on_play_selected(self) -> None:
-        """Placeholder enquanto a cena principal não for implementada."""
-        print("[TODO] Iniciar jogo: implemente a cena principal.")
+        """Alterna para a cena de seleção de músicas"""
+        self.app.change_scene(MusicSelectScene(self.app))
 
     def _on_add_music_selected(self) -> None:
         """Placeholder para o fluxo de cadastro de músicas."""
