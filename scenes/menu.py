@@ -4,8 +4,10 @@ import pygame
 
 from .base import BaseScene
 from .music_select import MusicSelectScene
+from .add_music import AddMusicScene
 from utils.constants import COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_MUTED, SCREEN_WIDTH, SCREEN_HEIGHT
 from utils.buttons import Button, ButtonTheme
+
 
 SUBTITLE_TEXT = "Pressione um botão para começar"
 
@@ -90,8 +92,8 @@ class MenuScene(BaseScene):
         self.app.change_scene(MusicSelectScene(self.app))
 
     def _on_add_music_selected(self) -> None:
-        """Placeholder para o fluxo de cadastro de músicas."""
-        print("[TODO] Adicionar música: implemente fluxo de cadastro.")
+        """Alterna para a cena de adição de músicas."""
+        self.app.change_scene(AddMusicScene(self.app))
 
     def _on_toggle_fullscreen(self) -> None:
         """Solicita ao controlador a alternância de modo de tela."""
