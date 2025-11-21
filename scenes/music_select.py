@@ -126,10 +126,7 @@ class MusicSelectScene(BaseScene):
 
 
     def update(self, dt: float) -> None:
-        """Verifica se a música de preview terminou."""
-        # Opcional: se a música de preview acabar, pare-a.
-        if not pygame.mixer.music.get_busy():
-            pass # Você pode reiniciar o preview se quiser
+        pass
 
     def render(self, surface: pygame.Surface) -> None:
         """Renderiza layout da cena"""

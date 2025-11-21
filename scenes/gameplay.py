@@ -10,6 +10,9 @@ class GameplayScene(BaseScene):
     """Cena onde ocorre toda a jogabilidade"""
     def __init__(self, app):
         self.app = app
+        self.note_x = None
+        self.note_radius = 160 // 3
+        self.note_speed = 300
 
     def render(self, surface: pygame.Surface) -> None:
         """Renderiza layout da cena"""
@@ -17,6 +20,7 @@ class GameplayScene(BaseScene):
 
         self.render_lane(surface) # lane
         self.render_hit_area(surface) # área de acerto
+        self.note_movement(surface) # nota em movimento
 
     def render_lane(self, surface: pygame.Surface) -> None:
         """Desenha a lane em que percorrem as notas"""
@@ -47,15 +51,27 @@ class GameplayScene(BaseScene):
     
     def render_note(self, surface: pygame.Surface, note_center_x: int, note_center_y: int) -> None:
         """Desenha uma nota"""
-        note_radius = 160 // 3
-
-        # superfície com alpha para efeito semi-transparente
-        note_surf = pygame.Surface((note_radius * 2, note_radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(note_surf, COLOR_PINK_NOTE, (note_radius, note_radius), note_radius)
-        surface.blit(note_surf, (note_center_x - note_radius, note_center_y - note_radius))
+        note_surf = pygame.Surface((self.note_radius * 2, self.note_radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(note_surf, COLOR_PINK_NOTE, (self.note_radius, self.note_radius), self.note_radius)
+        surface.blit(note_surf, (note_center_x - self.note_radius, note_center_y - self.note_radius))
+        
+    def note_movement(self, surface: pygame.Surface) -> None:
+        """Renderiza e move a nota da direita para a esquerda"""
+        width = surface.get_width()
+        note_y = self.lane_bottom - 100
+        
+        # Inicializa posição da nota se ainda não existe
+        if self.note_x is None:
+            self.note_x = width + self.note_radius
+        
+        # Renderiza a nota apenas se estiver visível (antes de ser destruída)
+        if self.note_x >= 300:
+            self.render_note(surface, int(self.note_x), note_y)
 
     def handle_event(self, event: pygame.event.Event) -> None:
         pass
 
     def update(self, dt: float) -> None:
-        pass
+        """Atualiza posição da nota"""
+        if self.note_x is not None and self.note_x >= 300:
+            self.note_x -= self.note_speed * dt
