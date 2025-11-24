@@ -172,7 +172,8 @@ class MusicSelectScene(BaseScene):
     def render_preview(self, surface: pygame.Surface) -> None:
         """Renderiza pré-visualização da música selecionada"""
         if not self.songs:
-            txt = self.title_font.render("Nenhuma música", True, COLOR_TEXT_MUTED)
+            no_song_font = pygame.font.Font(None, int(self.title_font.get_height() * 0.75))
+            txt = no_song_font.render("Nenhuma música", True, COLOR_TEXT_MUTED)
             surface.blit(txt, txt.get_rect(center=surface.get_rect().center))
             return
         
