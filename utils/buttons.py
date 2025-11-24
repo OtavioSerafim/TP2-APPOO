@@ -1,5 +1,6 @@
 """Componentes reutilizáveis de botões para interfaces pygame."""
 
+from pathlib import Path
 from typing import Callable
 
 import pygame
@@ -10,6 +11,52 @@ from .constants import (
     COLOR_BUTTON_BORDER,
     COLOR_TEXT,
 )
+
+
+_CLICK_SOUND: pygame.mixer.Sound | None = None
+_CLICK_SOUND_LOADED = False
+_HOVER_SOUND: pygame.mixer.Sound | None = None
+_HOVER_SOUND_LOADED = False
+
+
+def _play_click_sound() -> None:
+    """Reproduz efeito de clique caso o mixer esteja disponível."""
+    global _CLICK_SOUND_LOADED, _CLICK_SOUND
+
+    if not pygame.mixer.get_init():
+        return
+
+    if not _CLICK_SOUND_LOADED:
+        _CLICK_SOUND_LOADED = True
+        sound_path = Path(__file__).resolve().parents[1] / "assets" / "sounds" / "button-click.mp3"
+        if sound_path.exists():
+            try:
+                _CLICK_SOUND = pygame.mixer.Sound(str(sound_path))
+            except pygame.error:
+                _CLICK_SOUND = None
+
+    if _CLICK_SOUND is not None:
+        _CLICK_SOUND.play()
+
+
+def _play_hover_sound() -> None:
+    """Reproduz efeito ao posicionar o cursor sobre o botão."""
+    global _HOVER_SOUND_LOADED, _HOVER_SOUND
+
+    if not pygame.mixer.get_init():
+        return
+
+    if not _HOVER_SOUND_LOADED:
+        _HOVER_SOUND_LOADED = True
+        sound_path = Path(__file__).resolve().parents[1] / "assets" / "sounds" / "button-hover.mp3"
+        if sound_path.exists():
+            try:
+                _HOVER_SOUND = pygame.mixer.Sound(str(sound_path))
+            except pygame.error:
+                _HOVER_SOUND = None
+
+    if _HOVER_SOUND is not None:
+        _HOVER_SOUND.play()
 
 
 class ButtonTheme:
@@ -49,9 +96,13 @@ class Button:
     def handle_event(self, event: pygame.event.Event) -> None:
         """Processa eventos de mouse para interação com o botão."""
         if event.type == pygame.MOUSEMOTION:
+            was_hovered = self._is_hovered
             self._is_hovered = self.rect.collidepoint(event.pos)
+            if self._is_hovered and not was_hovered:
+                _play_hover_sound()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.rect.collidepoint(event.pos):
+                _play_click_sound()
                 self.on_click()
 
     def draw(self, surface: pygame.Surface) -> None:
