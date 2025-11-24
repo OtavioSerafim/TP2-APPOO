@@ -14,14 +14,24 @@ COLOR_YELLOW_NOTE = (224, 208, 77)
 class GameplayScene(BaseScene):
     """Cena onde ocorre toda a jogabilidade"""
     def __init__(self, app, song_data: dict):
+        self.key_cooldown = 120  # ms entre hits da mesma tecla
+        self.last_key_hit_time = {}  # key -> ticks
         self.app = app
         self.song_data = song_data
         self.note_radius = 160 // 3
         self.note_speed = 300
         self.hit_area_x = 300
+        self.hit_tolerance = 80  # Raio da hit area
         self.notes = []  # Notas ativas na tela
         self.note_queue = []  # Notas aguardando spawn (do CSV)
         self.start_time = None  # Timestamp do início da música
+        
+        # Estatísticas
+        self.hits = 0
+        self.misses = 0
+        
+        # Fontes para UI
+        self.stats_font = pygame.font.Font(None, 36)
 
         # Inicializa posições da lane
         height = self.app.screen.get_height()
@@ -95,6 +105,7 @@ class GameplayScene(BaseScene):
         self.render_lane(surface)
         self.render_hit_area(surface)
         self.render_notes(surface)
+        self.render_stats(surface)
 
     def render_lane(self, surface: pygame.Surface) -> None:
         """Desenha a lane em que percorrem as notas"""
@@ -108,13 +119,12 @@ class GameplayScene(BaseScene):
 
     def render_hit_area(self, surface: pygame.Surface) -> None:
         """Desenha a área de acerto das notas"""
-        hit_radius = 80
         hit_center_y = self.lane_bottom - 100
 
-        hit_surf = pygame.Surface((hit_radius * 2, hit_radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(hit_surf, (255, 255, 255, 40), (hit_radius, hit_radius), hit_radius)
-        pygame.draw.circle(hit_surf, (255, 255, 255, 160), (hit_radius, hit_radius), 2 * hit_radius // 3)
-        surface.blit(hit_surf, (self.hit_area_x - hit_radius, hit_center_y - hit_radius))
+        hit_surf = pygame.Surface((self.hit_tolerance * 2, self.hit_tolerance * 2), pygame.SRCALPHA)
+        pygame.draw.circle(hit_surf, (255, 255, 255, 40), (self.hit_tolerance, self.hit_tolerance), self.hit_tolerance)
+        pygame.draw.circle(hit_surf, (255, 255, 255, 160), (self.hit_tolerance, self.hit_tolerance), 2 * self.hit_tolerance // 3)
+        surface.blit(hit_surf, (self.hit_area_x - self.hit_tolerance, hit_center_y - self.hit_tolerance))
     
     def render_note(self, surface: pygame.Surface, note_center_x: int, note_center_y: int, note_type: str) -> None:
         """Desenha uma nota com base no seu tipo"""
@@ -132,6 +142,14 @@ class GameplayScene(BaseScene):
         for note in self.notes:
             self.render_note(surface, int(note["x"]), note["y"], note["type"])
 
+    def render_stats(self, surface: pygame.Surface) -> None:
+        """Renderiza contador de acertos e erros"""
+        hits_text = self.stats_font.render(f"Acertos: {self.hits}", True, (0, 255, 0))
+        misses_text = self.stats_font.render(f"Erros: {self.misses}", True, (255, 0, 0))
+        
+        surface.blit(hits_text, (20, 20))
+        surface.blit(misses_text, (20, 60))
+
     def spawn_note(self, note_type: str) -> None:
         """Cria uma nova nota fora da tela à direita"""
         width = self.app.screen.get_width()
@@ -142,17 +160,78 @@ class GameplayScene(BaseScene):
         }
         self.notes.append(new_note)
 
+    def check_hit(self, note_type: str) -> bool:
+        """Tenta acertar a nota correta mais próxima da hit_area."""
+        if not self.notes:
+            self.misses += 1
+            print(f"MISS! Sem notas: {note_type}")
+            return False
+
+        # Remove notas que já passaram totalmente
+        passed = [n for n in self.notes if n["x"] < (self.hit_area_x - self.hit_tolerance)]
+        if passed:
+            for n in passed:
+                self.notes.remove(n)
+                self.misses += 1
+                print(f"MISS! Nota passou: {n['type']}")
+
+        if not self.notes:
+            return False
+
+        # Nota mais próxima do centro da hit area
+        closest = min(self.notes, key=lambda n: abs(n["x"] - self.hit_area_x))
+        distance = abs(closest["x"] - self.hit_area_x)
+
+        # Fora da janela de acerto
+        if distance > self.hit_tolerance:
+            self.misses += 1
+            print(f"MISS! Tipo: {note_type}")
+            return False
+
+        # Dentro da janela: verifica tipo
+        if closest["type"] == note_type:
+            self.notes.remove(closest) # deleta nota ao acertar
+            self.hits += 1
+            print(f"HIT! Tipo: {note_type}")
+            return True
+        else:
+            self.misses += 1
+            print(f"MISS! Esperava {closest['type']}, recebeu {note_type}")
+            return False
+    
+    def _can_trigger(self, key: int) -> bool:
+        now = pygame.time.get_ticks()
+        last = self.last_key_hit_time.get(key, -10**9)
+        if now - last >= self.key_cooldown:
+            self.last_key_hit_time[key] = now
+            return True
+        return False
+
     def handle_event(self, event: pygame.event.Event) -> None:
         # Timer para iniciar a música
         if event.type == pygame.USEREVENT + 1:
             pygame.mixer.music.play()
             print("Música iniciada!")
         
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            pygame.mixer.music.stop()
-            pygame.time.set_timer(pygame.USEREVENT + 1, 0)  # Cancela timer
-            from .music_select import MusicSelectScene
-            self.app.change_scene(MusicSelectScene(self.app))
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pygame.mixer.music.stop()
+                pygame.time.set_timer(pygame.USEREVENT + 1, 0)  # Cancela timer
+                from .music_select import MusicSelectScene
+                self.app.change_scene(MusicSelectScene(self.app))
+
+            keys = pygame.key.get_pressed()
+
+            # Reconhece combinação de teclas
+            if keys[pygame.K_a] and keys[pygame.K_v]:
+                if self._can_trigger(pygame.K_a) and self._can_trigger(pygame.K_v):
+                    self.check_hit("f")
+                return
+
+            # Teclas individuais
+            if event.key == pygame.K_z and self._can_trigger(pygame.K_z): self.check_hit("g")
+            elif event.key == pygame.K_a and self._can_trigger(pygame.K_a): self.check_hit("a")
+            elif event.key == pygame.K_v and self._can_trigger(pygame.K_v): self.check_hit("m")
 
     def update(self, dt: float) -> None:
         """Atualiza posição das notas e spawna baseado no timer real"""
@@ -173,5 +252,14 @@ class GameplayScene(BaseScene):
         for note in self.notes:
             note["x"] -= self.note_speed * dt
         
-        # Remove notas que passaram da área de acerto
-        self.notes = [note for note in self.notes if note["x"] >= 250]
+        # Verifica notas que passaram da hit area (erros)
+        notes_to_remove = []
+        for note in self.notes:
+            if note["x"] < (self.hit_area_x - self.hit_tolerance):
+                notes_to_remove.append(note)
+                self.misses += 1
+                print(f"MISS! Nota passou: {note['type']}")
+        
+        # Remove notas perdidas
+        for note in notes_to_remove:
+            self.notes.remove(note)
