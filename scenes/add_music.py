@@ -64,6 +64,7 @@ class AddMusicScene(BaseScene):
     """Tela que recebe dados do usuário e importa uma nova música."""
 
     def __init__(self, app) -> None:
+        super().__init__()
         self.app = app
         font_sizes = UI_CONFIG["font_sizes"]
         self.title_font = pygame.font.Font(None, font_sizes["title"])
@@ -232,7 +233,7 @@ class AddMusicScene(BaseScene):
         if (width, height) != self._layout_size:
             self._apply_layout(width, height)
 
-        surface.fill(COLOR_BACKGROUND)
+        self.draw_background(surface, COLOR_BACKGROUND)
 
         title = self.title_font.render("Adicionar Música", True, COLOR_PRIMARY)
         surface.blit(title, title.get_rect(center=self._title_pos))

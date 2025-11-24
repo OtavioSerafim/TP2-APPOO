@@ -11,6 +11,7 @@ class MusicSelectScene(BaseScene):
     """Cena com lista das músicas disponíveis e pré-visualização da música selecionada"""
     def __init__(self, app) -> None:
         """Configura fontes, tema e layout inicial do menu."""
+        super().__init__()
         self.app = app
         self.title_font = pygame.font.Font(None, 82)
         self.subtitle_font = pygame.font.Font(None, 36)
@@ -133,7 +134,7 @@ class MusicSelectScene(BaseScene):
 
     def render(self, surface: pygame.Surface) -> None:
         """Renderiza layout da cena"""
-        surface.fill(COLOR_BACKGROUND)
+        self.draw_background(surface, COLOR_BACKGROUND)
         width, height = surface.get_size()
 
         # Preview (esquerda)
