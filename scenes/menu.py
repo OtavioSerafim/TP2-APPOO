@@ -4,8 +4,10 @@ import pygame
 
 from .base import BaseScene
 from .music_select import MusicSelectScene
-from utils.constants import COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_MUTED, SCREEN_WIDTH, SCREEN_HEIGHT
+from .add_music import AddMusicScene
+from utils.constants import COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_TEXT_MUTED, SCREEN_WIDTH, SCREEN_HEIGHT
 from utils.buttons import Button, ButtonTheme
+
 
 SUBTITLE_TEXT = "Pressione um botão para começar"
 
@@ -15,16 +17,12 @@ class MenuScene(BaseScene):
 
     def __init__(self, app) -> None:
         """Configura fontes, tema e layout inicial do menu."""
+        super().__init__(background_name="menu_background.png")
         self.app = app
         self.title_font = pygame.font.Font(None, 82)
         self.subtitle_font = pygame.font.Font(None, 36)
         self.button_font = pygame.font.Font(None, 42)
-        self.theme = ButtonTheme(
-            background=(42, 52, 71),
-            background_hover=(70, 92, 141),
-            border=(20, 28, 43),
-            text=COLOR_TEXT,
-        )
+        self.theme = ButtonTheme()
         self.buttons = self._build_buttons()
         self._title_pos = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3)
         self._subtitle_pos = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3 + 60)
@@ -49,11 +47,12 @@ class MenuScene(BaseScene):
         button_width = min(420, int(width * 0.45))
         button_height = 70
         spacing = max(24, button_height // 3)
+        vertical_shift = -50
 
-        title_y = max(int(height * 0.25), 80)
+        title_y = max(int(height * 0.25) + vertical_shift, 80)
         subtitle_y = title_y + 60
         block_height = len(self.buttons) * button_height + (len(self.buttons) - 1) * spacing
-        block_start_y = height // 2 - block_height // 2 + 40
+        block_start_y = height // 2 - block_height // 2 + vertical_shift
         start_y = max(block_start_y, subtitle_y + 60)
 
         for index, button in enumerate(self.buttons):
@@ -80,9 +79,17 @@ class MenuScene(BaseScene):
         if (width, height) != self._layout_size:
             self._apply_layout(width, height)
 
-        surface.fill(COLOR_BACKGROUND)
+        self.draw_background(surface, COLOR_BACKGROUND)
+
         title = self.title_font.render("Engrenada Hero", True, COLOR_PRIMARY)
-        surface.blit(title, title.get_rect(center=self._title_pos))
+        title_rect = title.get_rect(center=self._title_pos)
+
+        title_shadow = self.title_font.render("Engrenada Hero", True, (0, 0, 0))
+        title_shadow = title_shadow.convert_alpha()
+        title_shadow.set_alpha(190)
+        shadow_rect = title_rect.move(4, 4)
+        surface.blit(title_shadow, shadow_rect)
+        surface.blit(title, title_rect)
 
         subtitle = self.subtitle_font.render(SUBTITLE_TEXT, True, COLOR_TEXT_MUTED)
         surface.blit(subtitle, subtitle.get_rect(center=self._subtitle_pos))
@@ -95,8 +102,8 @@ class MenuScene(BaseScene):
         self.app.change_scene(MusicSelectScene(self.app))
 
     def _on_add_music_selected(self) -> None:
-        """Placeholder para o fluxo de cadastro de músicas."""
-        print("[TODO] Adicionar música: implemente fluxo de cadastro.")
+        """Alterna para a cena de adição de músicas."""
+        self.app.change_scene(AddMusicScene(self.app))
 
     def _on_toggle_fullscreen(self) -> None:
         """Solicita ao controlador a alternância de modo de tela."""

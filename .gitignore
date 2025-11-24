@@ -207,5 +207,5 @@ __marimo__/
 *.ps1
 
 # músicas
-*.mp3
+musics/*.mp3
 *.csv
