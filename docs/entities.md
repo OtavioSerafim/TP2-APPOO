@@ -3,21 +3,22 @@
 > Estruturas orientadas a objetos que representarão músicas, notas e demais elementos de gameplay.
 
 ## Estado Atual
-- As classes encontram-se como *stubs* (arquivos vazios) aguardando implementação.
-- A pasta `entities/` contém `Music.py` e o pacote `Notes/` com tipos específicos (`Note`, `Agudo`, `Grave`, `Flam`).
-- A intenção é separar regras de negócio do loop gráfico, permitindo testes unitários sem pygame.
+- As classes centrais já possuem os dados mínimos necessários para a gameplay rítmica.
+- A pasta `entities/` contém `Music.py` e o pacote `Notes/` com tipos específicos (`Note`, `Agudo`, `Grave`, `Flam`, `Mao`).
+- A intenção segue sendo separar regras de negócio do loop gráfico, permitindo testes unitários sem pygame.
 
 ## `Music`
-- Servirá como agregador de metadados da faixa: título exibido, caminhos de áudio/mapa e tempo de offset.
-- Pode encapsular parsing do CSV para gerar notas ou delegar para uma fábrica dedicada.
+- Estrutura simples com três atributos: `title`, `csv_path` e `mp3_path`.
+- Criada pela `MusicSelectScene` ao varrer a pasta `musics/`, servindo como DTO para outras cenas.
+- O parsing do CSV fica a cargo da `GameplayScene`, que converte as linhas em objetos `Note` específicos.
 
 ## Pacote `Notes`
-- `Note` deverá definir a interface para eventos musicais (tempo de disparo, duração, tipo de acerto esperado).
-- Tipos concretos (`Agudo`, `Grave`, `Flam`) representarão variações de notas e permitirão polimorfismo durante o gameplay.
-- Ideal manter cada classe responsável por calcular sua janela de acerto e feedback visual/sonoro.
+- `Note` define atributos compartilhados: tempos de spawn/hit, tipo (`note_type`), posição na tela, estado de animação (`state`, `fade_elapsed`, `alpha`), resultado (`perfect/good/miss`) e informações auxiliares como `key_mistaken`.
+- Tipos concretos (`Agudo`, `Grave`, `Flam`, `Mao`) fornecem o timbre/efeito sonoro por meio do método `note_sound` (o detalhamento está nos arquivos específicos).
+- O gameplay atual delega à cena o cálculo das janelas de acerto, mas os objetos mantêm flags suficientes para controlar animações de fade/out e queda.
 
 ## Próximos Passos Recomendados
-1. Definir atributos mínimos da `Music` (nome, bpm, offset, caminho do mapa, caminho do áudio).
-2. Criar um parser que converta o CSV em uma lista de `Note` com timestamps absolutos.
-3. Implementar comportamento comum em `Note` (por exemplo, `is_hit(timestamp)`), delegando particularidades aos filhos.
-4. Integrar as entidades à futura `GameplayScene`, que consumirá esses objetos para sincronizar notas e scoring.
+1. Expandir `Music` caso sejam necessários metadados adicionais (por exemplo BPM, offset ou dificuldade).
+2. Avaliar mover lógica de parsing/validação do CSV para uma fábrica dedicada, mantendo `GameplayScene` enxuta.
+3. Padronizar métodos utilitários em `Note` (ex.: helpers de janela de acerto) para reduzir código duplicado na cena.
+4. Escrever testes unitários para validar parsing das notas e atualização de estados (fade, queda, etc.).
