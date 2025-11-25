@@ -2,6 +2,7 @@
 
 import pygame
 
+from models import Models
 from scenes import BaseScene, MenuScene
 
 SCREEN_WIDTH = 800
@@ -28,6 +29,8 @@ class GameApp:
         pygame.display.set_caption("Engrenada Hero")
         self.clock = pygame.time.Clock()
         self.running = False
+        self.models = Models()
+        self.active_player = None
         self.active_scene: BaseScene = MenuScene(self)
 
     def toggle_fullscreen(self) -> None:
@@ -49,19 +52,21 @@ class GameApp:
     def run(self) -> None:
         """Executa o loop principal tratando eventos, atualização e renderização."""
         self.running = True
-        while self.running:
-            dt = self.clock.tick(FRAME_RATE) / 1000.0
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    break
-                self.active_scene.handle_event(event)
+        try:
+            while self.running:
+                dt = self.clock.tick(FRAME_RATE) / 1000.0
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                        break
+                    self.active_scene.handle_event(event)
 
-            self.active_scene.update(dt)
-            self.active_scene.render(self.screen)
-            pygame.display.flip()
-
-        pygame.quit()
+                self.active_scene.update(dt)
+                self.active_scene.render(self.screen)
+                pygame.display.flip()
+        finally:
+            self.models.close()
+            pygame.quit()
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 # TP2-APPOO — Engrenada Hero
 
-Protótipo de jogo rítmico desenvolvido como continuação prática da disciplina **Análise, Projeto e Programação Orientados a Objetos (APPOO)**. A aplicação evolui o foco do TP1 para um domínio de entretenimento, experimentando arquitetura orientada a objetos sobre **pygame**. O código já implementa fluxo de menus, gerenciamento básico de músicas e conectores de banco de dados; o módulo de **gameplay ainda será implementado** nas próximas entregas.
+Protótipo de jogo rítmico desenvolvido como continuação prática da disciplina **Análise, Projeto e Programação Orientados a Objetos (APPOO)**. A aplicação evolui o foco do TP1 para um domínio de entretenimento, experimentando arquitetura orientada a objetos sobre **pygame**. O código já implementa fluxo de menus, autenticação leve de jogadores, ranking de músicas e gameplay com registro de pontuação.
 
 ## 🧭 Contexto acadêmico
 O objetivo é validar conceitos de orientação a objetos em um cenário interativo: estados de jogo, transições de cena, componentes reutilizáveis e integração com persistência simples via SQLite. A stack (Python + pygame) mantém a filosofia da disciplina de trabalhar com bibliotecas acessíveis, privilegiando clareza arquitetural em vez de engine pesada.
@@ -12,16 +12,16 @@ O objetivo é validar conceitos de orientação a objetos em um cenário interat
 - **Persistência modelada**: camada `models/` replica o padrão de CRUD genérico do TP1 para armazenar jogadores, históricos de partidas e métricas básicas.
 
 ## 🚀 Visão geral da aplicação
-- Menu inicial com botões para jogar, importar músicas, alternar tela cheia e sair.
-- Cena de seleção que lista músicas válidas em `musics/`, toca prévia em áudio e mantém destaque navegável por teclado.
+- Menu inicial com botões para jogar, importar músicas, alternar tela cheia e sair, além de um painel no canto inferior esquerdo para criar/login de jogadores persistidos em SQLite.
+- Cena de seleção que lista músicas válidas em `musics/`, toca prévia em áudio, exibe leaderboard com top 10 daquela faixa e mostra o melhor resultado do jogador ativo.
 - Cena de importação que lê arquivos ZIP (CSV + MP3), sanitiza nomes e registra a nova música no diretório do jogo.
-- Estrutura inicial para registrar jogadores e pontuações; o loop de gameplay (acertos/erros em tempo real) será plugado em uma nova cena.
+- Gameplay rítmico que sincroniza notas do CSV, calcula hits/perfects, aplica feedback visual e salva a partida com score e breakdown de acertos.
 
 ## 🧱 Arquitetura em camadas
 - `game_controller.py`: ponto de entrada, configura janela, relógio e roteamento entre cenas.
 - `scenes/`: camadas de apresentação do game, com uma base abstrata para reuso de comportamento.
 - `utils/`: componentes visuais reutilizáveis (`Button`, `InputField`) e constantes de cores/resolução.
-- `entities/`: objetos de domínio que representarão músicas, notas e metadados (em evolução).
+- `entities/`: objetos de domínio que representam músicas (`Music`) e notas (`Note` + variações) consumidos pela gameplay.
 - `models/`: camada SQLite genérica para jogadores (`Player`) e histórico de sessões (`Play`), reutilizando `Model`/`ModelBase`.
 - `Database/`: script de inicialização e migrações SQL versionadas (criação de tabelas `player` e `plays`).
 - `assets/`: plano de fundo, imagens e sons auxiliares.
@@ -30,7 +30,7 @@ O objetivo é validar conceitos de orientação a objetos em um cenário interat
 1. A pasta `musics/` agrupa uma subpasta por música.
 2. Cada música deve conter exatamente um `.csv` (mapa de notas) e um `.mp3` (trilha de áudio).
 3. A cena **Adicionar Música** aceita um ZIP com esses arquivos, cria a estrutura padronizada (`map.csv` + `audio.mp3`) e já deixa a faixa disponível na seleção.
-4. A cena de gameplay consumirá esses dados para sincronizar notas e scoring (implementação pendente).
+4. A cena de gameplay consome esses dados para sincronizar notas, spawnar objetos `Note` concretos e avaliar acertos.
 
 ## 🗄️ Banco de dados e migrações
 - Banco SQLite em `Database/app.db`.
@@ -73,9 +73,11 @@ O objetivo é validar conceitos de orientação a objetos em um cenário interat
 
 ## 🌐 Controles atuais
 - `Setas para cima/baixo`: navega na lista de músicas.
-- `Enter`: confirma a música selecionada (placeholder para iniciar gameplay).
-- `Esc`: retorna ao menu a partir de qualquer cena.
-- Mouse interage com botões e campos.
+- `Enter`: confirma a música selecionada e inicia o gameplay.
+- `Esc`: retorna ao menu a partir de qualquer cena (durante o gameplay encerra a música atual e volta para a seleção).
+- `Z`, `A` e `Espaço`: executam notas individuais (grave, agudo, mão).
+- `A + Espaço` simultâneos: executam a nota `Flam`.
+- Mouse interage com botões, campo de jogador e demais elementos de UI.
 
 ## 📦 Dependências principais
 - [pygame](https://www.pygame.org/news) para renderização, áudio e loop de jogo.
@@ -83,10 +85,10 @@ O objetivo é validar conceitos de orientação a objetos em um cenário interat
 - [sqlite3](https://docs.python.org/3/library/sqlite3.html) da biblioteca padrão, usado nos modelos de persistência.
 
 ## 🚧 Próximos passos
-- Implementar **GameplayScene** com parsing do CSV e sincronização das notas.
-- Persistir resultados de partidas, conectando cenas às tabelas `player` e `plays`.
-- Expandir entidades (ex.: `Music`, `Note`) e utilitários para manipular tempo, feedback visual e áudio.
-- Integrar feedback visual e HUD de pontuação durante a execução das faixas.
+- Expandir feedback audiovisual (efeitos sonoros/visuais diferenciados por resultado, partículas, HUD mais rico).
+- Implementar opções de dificuldade e métricas extras (combo, precisão percentual, streak).
+- Permitir replays ou histórico detalhado por jogador dentro do próprio jogo.
+- Automatizar testes para parsing das notas e registro de partidas.
 
 ---
 
