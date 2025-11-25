@@ -52,6 +52,7 @@ class GameplayScene(BaseScene):
         self.results_title_font = pygame.font.Font(None, 72)
         self.results_font = pygame.font.Font(None, 40)
         self.results_hint_font = pygame.font.Font(None, 32)
+        self.legend_font = pygame.font.Font(None, 30)
 
         # Inicializa posições da lane
         height = self.app.screen.get_height()
@@ -265,6 +266,7 @@ class GameplayScene(BaseScene):
         self.render_notes(surface)
         self._render_repique(surface)
         self.render_stats(surface)
+        self._render_legend(surface)
 
         overlay_alpha = 0
         if self.state == "ending_fade":
@@ -321,6 +323,8 @@ class GameplayScene(BaseScene):
         note_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
         alpha = max(0, min(255, int(note.alpha)))
         pygame.draw.circle(note_surf, (*note_color, alpha), (radius, radius), radius)
+        outline_width = max(1, radius // 8)
+        pygame.draw.circle(note_surf, (0, 0, 0, alpha), (radius, radius), radius, outline_width)
         surface.blit(note_surf, (note_center_x - radius, note_center_y - radius))
 
     def render_notes(self, surface: pygame.Surface) -> None:
@@ -337,6 +341,38 @@ class GameplayScene(BaseScene):
         surface.blit(hits_text, (20, 20))
         surface.blit(goods_text, (20, 60))
         surface.blit(misses_text, (20, 100))
+
+    def _render_legend(self, surface: pygame.Surface) -> None:
+        entries = [
+            ("Z", "Grave", COLOR_PINK_NOTE),
+            ("A", "Agudo", COLOR_BLUE_NOTE),
+            ("Espaço", "Mão", COLOR_YELLOW_NOTE),
+            ("A + Espaço", "Flam", COLOR_GREEN_NOTE),
+        ]
+
+        icon_radius = 14
+        spacing = 18
+        x = 20
+        y = self.lane_bottom + 20
+        y = min(surface.get_height() - self.legend_font.get_height() - 20, y)
+
+        for key_label, name, color in entries:
+            text_surface = self.legend_font.render(f"{key_label} - {name}", True, COLOR_TEXT)
+            entry_height = max(icon_radius * 2, text_surface.get_height())
+            entry_surface = pygame.Surface((icon_radius * 2 + 10 + text_surface.get_width(), entry_height), pygame.SRCALPHA)
+
+            center_y = entry_height // 2
+            pygame.draw.circle(entry_surface, (*color, 255), (icon_radius, center_y), icon_radius)
+            pygame.draw.circle(entry_surface, (0, 0, 0, 255), (icon_radius, center_y), icon_radius, max(1, icon_radius // 4))
+            entry_surface.blit(text_surface, (icon_radius * 2 + 10, center_y - text_surface.get_height() // 2))
+
+            if x + entry_surface.get_width() > surface.get_width() - 20:
+                x = 20
+                y += entry_height + spacing
+                y = min(surface.get_height() - entry_height - 20, y)
+
+            surface.blit(entry_surface, (x, y))
+            x += entry_surface.get_width() + spacing
 
     def _render_results(self, surface: pygame.Surface) -> None:
         if self.results_text_alpha <= 0:
