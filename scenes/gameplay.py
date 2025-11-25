@@ -23,6 +23,7 @@ class GameplayScene(BaseScene):
         
         # Estatísticas
         self.hits = 0
+        self.goods = 0
         self.misses = 0
         
         # Fontes para UI
@@ -150,11 +151,13 @@ class GameplayScene(BaseScene):
 
     def render_stats(self, surface: pygame.Surface) -> None:
         """Renderiza contador de acertos e erros"""
-        hits_text = self.stats_font.render(f"Acertos: {self.hits}", True, (0, 255, 0))
+        hits_text = self.stats_font.render(f"Perfeitas: {self.hits}", True, (0, 255, 0))
+        goods_text = self.stats_font.render(f"Boas: {self.goods}", True, (0, 0, 255))
         misses_text = self.stats_font.render(f"Erros: {self.misses}", True, (255, 0, 0))
         
         surface.blit(hits_text, (20, 20))
-        surface.blit(misses_text, (20, 60))
+        surface.blit(goods_text, (20, 60))
+        surface.blit(misses_text, (20, 100))
 
     def check_hit(self, note_type: str) -> bool:
         """Verifica acerto apenas na nota marcada como active."""
@@ -176,12 +179,23 @@ class GameplayScene(BaseScene):
 
         # Verifica o tipo da nota
         if active_note.note_type == note_type:
+            perfect_tolerance = 160 // 3
+
+            # Verifica qualidade do acerto
+            if distance > perfect_tolerance:
+                self.goods += 1
+                print(f"GOOD! Tipo: {note_type}")
+                self._activate_next_note()  # Ativa a próxima
+            else:
+                self.hits += 1
+                print(f"HIT! Tipo: {note_type}")
+
+            # Remove nota atual e ativa a próxima
             self.notes.remove(active_note)
-            self.hits += 1
-            print(f"HIT! Tipo: {note_type}")
-            self._activate_next_note()  # Ativa a próxima
+            self._activate_next_note()
             return True
         else:
+            active_note.key_mistaken = True # Registra que a nota já teve sua tecla confundida
             self.misses += 1
             print(f"MISS! Esperava {active_note.note_type}, recebeu {note_type}")
             return False
@@ -243,9 +257,13 @@ class GameplayScene(BaseScene):
         for note in self.notes:
             if note.x < (self.hit_area_x - self.hit_tolerance):
                 notes_to_remove.append(note)
-                self.misses += 1
-                print(f"MISS! Nota passou: {note.note_type}")
+                if not note.key_mistaken:
+                    self.misses += 1
+                    print(f"MISS! Nota passou: {note.note_type}")
         
         # Remove notas perdidas
         for note in notes_to_remove:
             self.notes.remove(note)
+            if self.notes:
+                self._activate_next_note()
+                

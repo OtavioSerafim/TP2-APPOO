@@ -8,5 +8,6 @@ class Note(ABC):
         self.note_type = note_type
         self.spawned = False
         self.active = False
+        self.key_mistaken = False
         self.x = None
         self.y = None
