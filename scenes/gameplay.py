@@ -3,7 +3,7 @@ import csv
 
 from entities.Notes.Note import Note
 from .base import BaseScene
-from utils.constants import COLOR_BACKGROUND, COLOR_YELLOW_BACKGROUND, COLOR_PINK_NOTE, COLOR_BLUE_NOTE, COLOR_GREEN_NOTE, COLOR_YELLOW_NOTE
+from utils.constants import COLOR_BACKGROUND, COLOR_YELLOW_BACKGROUND, COLOR_PINK_NOTE, COLOR_BLUE_NOTE, COLOR_GREEN_NOTE, COLOR_YELLOW_NOTE, COLOR_PERFECT_HIT, COLOR_GOOD_HIT, COLOR_MISS
 from .music_select import MusicSelectScene
 
 class GameplayScene(BaseScene):
@@ -40,6 +40,11 @@ class GameplayScene(BaseScene):
         spawn_x = width + self.note_radius
         distance = spawn_x - self.hit_area_x
         self.anticipation_time = distance / self.note_speed  # Em segundos
+
+        # Feedback visual
+        self.flash_duration_ms = 180
+        self.hit_flash_timer_ms = 0
+        self.hit_flash_color = None
         
         self._load_beatmap()
         self._start_music()
@@ -91,20 +96,55 @@ class GameplayScene(BaseScene):
             print(f"Erro ao carregar música: {e}")
 
     def spawn_note(self, note: Note) -> None:
-        """Cria uma nova nota fora da tela à direita"""
         width = self.app.screen.get_width()
-        note.x = width + self.note_radius # Posição inicial fora da tela
+        note.x = width + self.note_radius
         note.y = self.lane_bottom - 100
         note.spawned = True
-        note.active = (len(self.notes) == 0)
+        note.active = (len([n for n in self.notes if getattr(n, "state", None) is None]) == 0)
+        note.state = None        # None | 'fading' | 'falling'
+        note.result = None       # 'perfect' | 'good' | 'miss'
+        note.fade_elapsed = 0.0
+        note.fade_total = 0.4    # segundos
+        note.alpha = 255
         self.notes.append(note)
 
     def _activate_next_note(self) -> None:
-        """Ativa a próxima nota com base no hit_time"""
-        if self.notes:
-            # Ordena por hit_time
-            next = min(self.notes, key=lambda n: n.hit_time)
-            next.active = True
+        candidates = [n for n in self.notes if n.state is None]
+        for n in self.notes:
+            if n.state is None:
+                n.active = False
+        if not candidates:
+            return
+        nxt = min(candidates, key=lambda n: n.hit_time)
+        nxt.active = True
+
+    def _trigger_flash(self, color: tuple[int,int,int]) -> None:
+        self.hit_flash_color = color
+        self.hit_flash_timer_ms = self.flash_duration_ms
+
+    def _start_fade_animation(self, note: Note) -> None:
+        note.state = 'fading'
+        note.fade_elapsed = 0.0
+
+    def _start_miss_animation(self, note: Note) -> None:
+        note.state = 'falling'
+        note.fade_elapsed = 0.0
+        note.vy = 420   # velocidade queda px/s
+
+    def _update_note_animations(self, dt: float) -> None:
+        to_remove = []
+        for note in self.notes:
+            if note.state in ('fading', 'falling'):
+                note.fade_elapsed += dt
+                progress = note.fade_elapsed / note.fade_total
+                note.alpha = 255 * (1 - progress)
+                if note.state == 'falling':
+                    note.y += getattr(note, 'vy', 400) * dt
+                if progress >= 1.0 or note.alpha <= 0:
+                    to_remove.append(note)
+        for n in to_remove:
+            if n in self.notes:
+                self.notes.remove(n)
 
     def render(self, surface: pygame.Surface) -> None:
         """Renderiza layout da cena"""
@@ -127,22 +167,30 @@ class GameplayScene(BaseScene):
     def render_hit_area(self, surface: pygame.Surface) -> None:
         """Desenha a área de acerto das notas"""
         hit_center_y = self.lane_bottom - 100
+        base = pygame.Surface((self.hit_tolerance * 2, self.hit_tolerance * 2), pygame.SRCALPHA)
+        # brilho base
+        pygame.draw.circle(base, (255, 255, 255, 40), (self.hit_tolerance, self.hit_tolerance), self.hit_tolerance)
+        pygame.draw.circle(base, (255, 255, 255, 160), (self.hit_tolerance, self.hit_tolerance), 2 * self.hit_tolerance // 3)
+        surface.blit(base, (self.hit_area_x - self.hit_tolerance, hit_center_y - self.hit_tolerance))
 
-        hit_surf = pygame.Surface((self.hit_tolerance * 2, self.hit_tolerance * 2), pygame.SRCALPHA)
-        pygame.draw.circle(hit_surf, (255, 255, 255, 40), (self.hit_tolerance, self.hit_tolerance), self.hit_tolerance)
-        pygame.draw.circle(hit_surf, (255, 255, 255, 160), (self.hit_tolerance, self.hit_tolerance), 2 * self.hit_tolerance // 3)
-        surface.blit(hit_surf, (self.hit_area_x - self.hit_tolerance, hit_center_y - self.hit_tolerance))
+        # flash temporário
+        if self.hit_flash_timer_ms > 0 and self.hit_flash_color:
+            alpha = int(180 * (self.hit_flash_timer_ms / self.flash_duration_ms))
+            flash = pygame.Surface((self.hit_tolerance * 2, self.hit_tolerance * 2), pygame.SRCALPHA)
+            pygame.draw.circle(flash, (*self.hit_flash_color, alpha), (self.hit_tolerance, self.hit_tolerance), self.hit_tolerance)
+            surface.blit(flash, (self.hit_area_x - self.hit_tolerance, hit_center_y - self.hit_tolerance))
     
     def render_note(self, surface: pygame.Surface, note_center_x: int, note_center_y: int, note: Note) -> None:
-        """Desenha uma nota com base no seu tipo"""
         if note.note_type == "g": note_color = COLOR_PINK_NOTE
         elif note.note_type == "a": note_color = COLOR_BLUE_NOTE
         elif note.note_type == "m": note_color = COLOR_YELLOW_NOTE
-        elif note.note_type == "f": note_color = COLOR_GREEN_NOTE
+        else: note_color = COLOR_GREEN_NOTE
 
-        note_surf = pygame.Surface((self.note_radius * 2, self.note_radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(note_surf, note_color, (self.note_radius, self.note_radius), self.note_radius)
-        surface.blit(note_surf, (note_center_x - self.note_radius, note_center_y - self.note_radius))
+        radius = self.note_radius
+        note_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        alpha = max(0, min(255, int(note.alpha)))
+        pygame.draw.circle(note_surf, (*note_color, alpha), (radius, radius), radius)
+        surface.blit(note_surf, (note_center_x - radius, note_center_y - radius))
 
     def render_notes(self, surface: pygame.Surface) -> None:
         """Renderiza todas as notas ativas"""
@@ -162,10 +210,11 @@ class GameplayScene(BaseScene):
     def check_hit(self, note_type: str) -> bool:
         """Verifica acerto apenas na nota marcada como active."""
         # Busca a nota ativa
-        active_note = next((n for n in self.notes if n.active), None)
+        active_note = next((n for n in self.notes if n.active and n.state is None), None)
         
         if active_note is None:
             self.misses += 1
+            self._trigger_flash(COLOR_MISS)
             print(f"MISS! Nenhuma nota ativa para {note_type}")
             return False
 
@@ -173,6 +222,7 @@ class GameplayScene(BaseScene):
 
         # Verifica se está dentro da janela de acerto
         if distance > self.hit_tolerance:
+            self._trigger_flash(COLOR_MISS)
             self.misses += 1
             print(f"MISS! Nota ativa fora da hit_area")
             return False
@@ -184,10 +234,16 @@ class GameplayScene(BaseScene):
             # Verifica qualidade do acerto
             if distance > perfect_tolerance:
                 self.goods += 1
+                active_note.result = 'good'
+                self._trigger_flash(COLOR_GOOD_HIT)
+                self._start_fade_animation(active_note)
                 print(f"GOOD! Tipo: {note_type}")
                 self._activate_next_note()  # Ativa a próxima
             else:
                 self.hits += 1
+                active_note.result = 'perfect'
+                self._trigger_flash(COLOR_PERFECT_HIT)
+                self._start_fade_animation(active_note)
                 print(f"HIT! Tipo: {note_type}")
 
             # Remove nota atual e ativa a próxima
@@ -197,6 +253,7 @@ class GameplayScene(BaseScene):
         else:
             active_note.key_mistaken = True # Registra que a nota já teve sua tecla confundida
             self.misses += 1
+            self._trigger_flash(COLOR_MISS)
             print(f"MISS! Esperava {active_note.note_type}, recebeu {note_type}")
             return False
     
@@ -238,6 +295,13 @@ class GameplayScene(BaseScene):
         if self.start_time is None:
             return
         
+        # Atualiza flash
+        if self.hit_flash_timer_ms > 0:
+            self.hit_flash_timer_ms -= int(dt * 1000)
+            if self.hit_flash_timer_ms <= 0:
+                self.hit_flash_timer_ms = 0
+                self.hit_flash_color = None
+        
         # Calcula tempo decorrido usando pygame.time.get_ticks()
         current_time = pygame.time.get_ticks()
         music_time = (current_time - self.start_time) / 1000.0  # Converte ms para segundos
@@ -254,16 +318,22 @@ class GameplayScene(BaseScene):
         
         # Verifica notas que passaram da hit area (erros)
         notes_to_remove = []
-        for note in self.notes:
+        for note in [n for n in self.notes if n.state is None]:
             if note.x < (self.hit_area_x - self.hit_tolerance):
                 notes_to_remove.append(note)
                 if not note.key_mistaken:
                     self.misses += 1
+                    note.result = 'miss'
+                    self._trigger_flash(COLOR_MISS)
+                    self._start_miss_animation(note)
                     print(f"MISS! Nota passou: {note.note_type}")
         
+        # Atualiza animações
+        self._update_note_animations(dt)
+
         # Remove notas perdidas
         for note in notes_to_remove:
             self.notes.remove(note)
-            if self.notes:
+            if any(n.active for n in self.notes if n.state is None) is False:
                 self._activate_next_note()
                 
