@@ -1,15 +1,10 @@
 import pygame
 import csv
 
+from entities.Notes.Note import Note
 from .base import BaseScene
-from utils.constants import COLOR_BACKGROUND, SCREEN_WIDTH, SCREEN_HEIGHT
-
-COLOR_YELLOW_BACKGROUND = (228, 177, 39)
-COLOR_PINK_NOTE = (230, 52, 120)
-COLOR_BLUE_NOTE = (77, 87, 228)
-COLOR_GREEN_NOTE = (77, 228, 127)
-COLOR_YELLOW_NOTE = (224, 208, 77)
-
+from .music_select import MusicSelectScene
+from utils.constants import COLOR_BACKGROUND, COLOR_YELLOW_BACKGROUND, COLOR_PINK_NOTE, COLOR_BLUE_NOTE, COLOR_GREEN_NOTE, COLOR_YELLOW_NOTE
 
 class GameplayScene(BaseScene):
     """Cena onde ocorre toda a jogabilidade"""
@@ -51,7 +46,7 @@ class GameplayScene(BaseScene):
     def _load_beatmap(self) -> None:
         """Carrega timestamps das notas do arquivo CSV"""
         try:
-            with open(self.song_data['csv_path'], 'r') as file:
+            with open(self.song_data.csv_path, 'r') as file:
                 reader = csv.DictReader(file)
                 for row in reader:
                     hit_time = float(row.get('time', 0))  # Tempo quando nota deve estar na hit_area
@@ -63,20 +58,15 @@ class GameplayScene(BaseScene):
                         
                     spawn_time = hit_time
                     
-                    self.note_queue.append({
-                        'spawn_time': spawn_time,
-                        'hit_time': hit_time,
-                        'note_type': note_type,
-                        'spawned': False
-                    })
+                    self.note_queue.append(Note(spawn_time, hit_time, note_type))
             
-            self.note_queue.sort(key=lambda n: n['spawn_time'])
+            self.note_queue.sort(key=lambda n: n.spawn_time)
             print(f"Carregadas {len(self.note_queue)} notas do beatmap")
             print(f"Tempo de antecipação: {self.anticipation_time:.2f}s")
             
-            # Debug: mostra as primeiras notas
+            # Debug: mostra as 5 primeiras notas
             for i, note in enumerate(self.note_queue[:5]):
-                print(f"Nota {i+1}: spawn={note['spawn_time']:.2f}s, tipo={note['note_type']}")
+                print(f"Nota {i+1}: spawn={note.spawn_time:.2f}s, tipo={note.note_type}")
         
         except Exception as e:
             print(f"Erro ao carregar beatmap: {e}")
@@ -85,7 +75,7 @@ class GameplayScene(BaseScene):
     def _start_music(self) -> None:
         """Inicia a reprodução da música após o tempo de antecipação"""
         try:
-            pygame.mixer.music.load(self.song_data['mp3_path'])
+            pygame.mixer.music.load(self.song_data.mp3_path)
             pygame.mixer.music.set_volume(0.5)
             
             # Marca o tempo inicial ANTES de tocar
@@ -156,47 +146,46 @@ class GameplayScene(BaseScene):
         new_note = {
             "x": width + self.note_radius,
             "y": self.lane_bottom - 100,
-            "type": note_type
+            "type": note_type,
+            "active": len(self.notes) == 0
         }
         self.notes.append(new_note)
 
+    def _activate_next_note(self) -> None:
+        """Ativa a próxima nota (a mais próxima da hit_area)"""
+        if self.notes:
+            # Ordena por posição x (mais próxima à esquerda é a próxima)
+            closest = min(self.notes, key=lambda n: n["x"])
+            closest["active"] = True
+
     def check_hit(self, note_type: str) -> bool:
-        """Tenta acertar a nota correta mais próxima da hit_area."""
-        if not self.notes:
+        """Verifica acerto apenas na nota marcada como active."""
+        # Busca a nota ativa
+        active_note = next((n for n in self.notes if n.get("active", False)), None)
+        
+        if active_note is None:
             self.misses += 1
-            print(f"MISS! Sem notas: {note_type}")
+            print(f"MISS! Nenhuma nota ativa para {note_type}")
             return False
 
-        # Remove notas que já passaram totalmente
-        passed = [n for n in self.notes if n["x"] < (self.hit_area_x - self.hit_tolerance)]
-        if passed:
-            for n in passed:
-                self.notes.remove(n)
-                self.misses += 1
-                print(f"MISS! Nota passou: {n['type']}")
+        distance = abs(active_note["x"] - self.hit_area_x)
 
-        if not self.notes:
-            return False
-
-        # Nota mais próxima do centro da hit area
-        closest = min(self.notes, key=lambda n: abs(n["x"] - self.hit_area_x))
-        distance = abs(closest["x"] - self.hit_area_x)
-
-        # Fora da janela de acerto
+        # Verifica se está dentro da janela de acerto
         if distance > self.hit_tolerance:
             self.misses += 1
-            print(f"MISS! Tipo: {note_type}")
+            print(f"MISS! Nota ativa fora da hit_area")
             return False
 
-        # Dentro da janela: verifica tipo
-        if closest["type"] == note_type:
-            self.notes.remove(closest) # deleta nota ao acertar
+        # Verifica o tipo da nota
+        if active_note["type"] == note_type:
+            self.notes.remove(active_note)
             self.hits += 1
             print(f"HIT! Tipo: {note_type}")
+            self._activate_next_note()  # Ativa a próxima
             return True
         else:
             self.misses += 1
-            print(f"MISS! Esperava {closest['type']}, recebeu {note_type}")
+            print(f"MISS! Esperava {active_note['type']}, recebeu {note_type}")
             return False
     
     def _can_trigger(self, key: int) -> bool:
@@ -217,7 +206,6 @@ class GameplayScene(BaseScene):
             if event.key == pygame.K_ESCAPE:
                 pygame.mixer.music.stop()
                 pygame.time.set_timer(pygame.USEREVENT + 1, 0)  # Cancela timer
-                from .music_select import MusicSelectScene
                 self.app.change_scene(MusicSelectScene(self.app))
 
             keys = pygame.key.get_pressed()
@@ -244,9 +232,9 @@ class GameplayScene(BaseScene):
         
         # Spawna notas do beatmap no momento certo
         for note_data in self.note_queue:
-            if not note_data['spawned'] and music_time >= note_data['spawn_time']:
-                self.spawn_note(note_data['note_type'])  # Passa o tipo da nota
-                note_data['spawned'] = True
+            if not note_data.spawned and music_time >= note_data.spawn_time:
+                self.spawn_note(note_data.note_type)  # Passa o tipo da nota
+                note_data.spawned = True
         
         # Move todas as notas
         for note in self.notes:

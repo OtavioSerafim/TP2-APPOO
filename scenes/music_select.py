@@ -3,7 +3,9 @@
 import pygame
 import pathlib
 
+from .gameplay import GameplayScene
 from .base import BaseScene
+from entities.Music import Music
 from utils.buttons import Button, ButtonTheme
 from utils.constants import COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_MUTED, SCREEN_WIDTH, SCREEN_HEIGHT
 
@@ -75,14 +77,9 @@ class MusicSelectScene(BaseScene):
 
                 # Se ambos existirem e só um de cada, a música é válida
                 if len(csv_file) == 1 and len(mp3_file) == 1:
-                    song_data = {
-                        "title": song_folder.name,
-                        "csv_path": csv_file[0],
-                        "mp3_path": mp3_file[0]
-                    }
-                    # Adiciona à lista de músicas válidas
-                    song_list.append(song_data)
-                    print(f"Música encontrada: {song_data['title']}")
+                    song_data = Music(song_folder.name, csv_file[0], mp3_file[0])
+                    song_list.append(song_data) # Adiciona à lista de músicas válidas
+                    print(f"Música encontrada: {song_data.title}")
                 else:
                     print(f"Pasta '{song_folder.name}' ignorada: requer 1 CSV e 1 MP3")
 
@@ -99,7 +96,7 @@ class MusicSelectScene(BaseScene):
         
         try:
             song = self.songs[self.selected_index]
-            pygame.mixer.music.load(song['mp3_path'])
+            pygame.mixer.music.load(song.mp3_path)
             pygame.mixer.music.set_volume(0.1)
             pygame.mixer.music.play(loops = 0, start = 30.0, fade_ms = 500)
         
@@ -178,7 +175,7 @@ class MusicSelectScene(BaseScene):
 
         # Quebra o título se necessário
         max_width = surface.get_width() * 0.9  # 90% da largura
-        lines = self._wrap_text(song["title"], self.title_font, max_width)
+        lines = self._wrap_text(song.title, self.title_font, max_width)
         
         # Calcula altura total do texto
         line_height = self.title_font.get_linesize()
@@ -205,7 +202,7 @@ class MusicSelectScene(BaseScene):
             prefix = "> " if is_selected else "  "
             
             # Quebra o texto se necessário
-            full_text = prefix + song["title"]
+            full_text = prefix + song.title
             lines = self._wrap_text(full_text, self.button_font, max_width)
             
             # Renderiza apenas a primeira linha
@@ -226,7 +223,6 @@ class MusicSelectScene(BaseScene):
         pygame.mixer.music.stop()
         song = self.songs[self.selected_index]
         
-        from .gameplay import GameplayScene
         self.app.change_scene(GameplayScene(self.app, song))  # Passa dados da música
 
     def _on_home_selected(self) -> None:
