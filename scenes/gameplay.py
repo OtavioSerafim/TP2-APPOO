@@ -2,6 +2,10 @@ import pygame
 import csv
 
 from entities.Notes.Note import Note
+from entities.Notes.agudo.Agudo import Agudo
+from entities.Notes.grave.Grave import Grave
+from entities.Notes.flam.Flam import Flam
+from entities.Notes.mao.Mao import Mao
 from .base import BaseScene
 from utils.constants import COLOR_BACKGROUND, COLOR_YELLOW_BACKGROUND, COLOR_PINK_NOTE, COLOR_BLUE_NOTE, COLOR_GREEN_NOTE, COLOR_YELLOW_NOTE, COLOR_PERFECT_HIT, COLOR_GOOD_HIT, COLOR_MISS
 from .music_select import MusicSelectScene
@@ -9,7 +13,7 @@ from .music_select import MusicSelectScene
 class GameplayScene(BaseScene):
     """Cena onde ocorre toda a jogabilidade"""
     def __init__(self, app, song_data: dict):
-        self.key_cooldown = 120  # ms entre hits da mesma tecla
+        self.key_cooldown = 10  # ms entre hits da mesma tecla
         self.last_key_hit_time = {}  # key -> ticks
         self.app = app
         self.song_data = song_data
@@ -64,7 +68,10 @@ class GameplayScene(BaseScene):
                         
                     spawn_time = hit_time
                     
-                    self.note_queue.append(Note(spawn_time, hit_time, note_type))
+                    if note_type == 'a': self.note_queue.append(Agudo(spawn_time, hit_time))
+                    if note_type == 'g': self.note_queue.append(Grave(spawn_time, hit_time))
+                    if note_type == 'f': self.note_queue.append(Flam(spawn_time, hit_time))
+                    if note_type == 'm': self.note_queue.append(Mao(spawn_time, hit_time))
             
             self.note_queue.sort(key=lambda n: n.spawn_time)
             print(f"Carregadas {len(self.note_queue)} notas do beatmap")
@@ -82,7 +89,7 @@ class GameplayScene(BaseScene):
         """Inicia a reprodução da música após o tempo de antecipação"""
         try:
             pygame.mixer.music.load(self.song_data.mp3_path)
-            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.set_volume(0.4)
             
             # Marca o tempo inicial ANTES de tocar
             self.start_time = pygame.time.get_ticks()
@@ -221,7 +228,7 @@ class GameplayScene(BaseScene):
         distance = abs(active_note.x - self.hit_area_x)
 
         # Verifica se está dentro da janela de acerto
-        if distance > self.hit_tolerance:
+        if distance > self.hit_tolerance * 2:
             self._trigger_flash(COLOR_MISS)
             self.misses += 1
             print(f"MISS! Nota ativa fora da hit_area")
@@ -238,7 +245,6 @@ class GameplayScene(BaseScene):
                 self._trigger_flash(COLOR_GOOD_HIT)
                 self._start_fade_animation(active_note)
                 print(f"GOOD! Tipo: {note_type}")
-                self._activate_next_note()  # Ativa a próxima
             else:
                 self.hits += 1
                 active_note.result = 'perfect'
@@ -280,15 +286,22 @@ class GameplayScene(BaseScene):
             keys = pygame.key.get_pressed()
 
             # Reconhece combinação de teclas
-            if keys[pygame.K_a] and keys[pygame.K_v]:
-                if self._can_trigger(pygame.K_a) and self._can_trigger(pygame.K_v):
+            if keys[pygame.K_a] and keys[pygame.K_SPACE]:
+                if self._can_trigger(pygame.K_a) and self._can_trigger(pygame.K_SPACE):
+                    Flam.note_sound(self)
                     self.check_hit("f")
                 return
 
             # Teclas individuais
-            if event.key == pygame.K_z and self._can_trigger(pygame.K_z): self.check_hit("g")
-            elif event.key == pygame.K_a and self._can_trigger(pygame.K_a): self.check_hit("a")
-            elif event.key == pygame.K_v and self._can_trigger(pygame.K_v): self.check_hit("m")
+            if event.key == pygame.K_z and self._can_trigger(pygame.K_z):
+                Grave.note_sound(self)
+                self.check_hit("g")
+            elif event.key == pygame.K_a and self._can_trigger(pygame.K_a):
+                Agudo.note_sound(self)
+                self.check_hit("a")
+            elif event.key == pygame.K_SPACE and self._can_trigger(pygame.K_SPACE):
+                Mao.note_sound(self)
+                self.check_hit("m")
 
     def update(self, dt: float) -> None:
         """Atualiza posição das notas e spawna baseado no timer real"""
