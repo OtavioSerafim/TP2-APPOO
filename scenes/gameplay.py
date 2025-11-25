@@ -18,7 +18,7 @@ class GameplayScene(BaseScene):
         self.app = app
         self.song_data = song_data
         self.note_radius = 160 // 3
-        self.note_speed = 300
+        self.note_speed = 450
         self.hit_area_x = 300
         self.hit_tolerance = 80  # Raio da hit area
         self.notes = []  # Notas ativas na tela
