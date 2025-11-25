@@ -1,6 +1,7 @@
 import pygame
 import csv
 from datetime import datetime
+from pathlib import Path
 
 from entities.Notes.Note import Note
 from entities.Notes.agudo.Agudo import Agudo
@@ -81,6 +82,15 @@ class GameplayScene(BaseScene):
         self.results_text_alpha = 0
         self.results_recorded = False
         self.results_message = ""
+
+        # Repique visual (feedback do último hit)
+        self.repique_target_height = (self.lane_bottom - self.lane_top) + 10
+        self.repique_images: dict[str, pygame.Surface] = {}
+        self.repique_state = "neutro"
+        self.repique_timer = 0.0
+        self.repique_anchor_top = 0
+        self.repique_anchor_right = 0
+        self._load_repique_sprites()
         
         self._load_beatmap()
         self._start_music()
@@ -170,6 +180,68 @@ class GameplayScene(BaseScene):
         note.fade_elapsed = 0.0
         note.vy = 420   # velocidade queda px/s
 
+    def _load_repique_sprites(self) -> None:
+        """Carrega e redimensiona as imagens do repique utilizado como feedback."""
+        base_path = Path(__file__).resolve().parents[1] / "assets" / "images"
+        lane_height = self.lane_bottom - self.lane_top
+        target_height = max(1, self.repique_target_height)
+
+        sprite_map = {
+            "neutro": "repique_neutro.png",
+            "perfeito": "repique_perfeito.png",
+            "bom": "repique_bom.png",
+            "erro": "repique_erro.png",
+        }
+
+        for state, filename in sprite_map.items():
+            path = base_path / filename
+            try:
+                image = pygame.image.load(str(path)).convert_alpha()
+            except pygame.error as exc:  # noqa: BLE001
+                print(f"Erro ao carregar sprite '{filename}': {exc}")
+                placeholder = pygame.Surface((target_height, target_height), pygame.SRCALPHA)
+                placeholder.fill((0, 0, 0, 0))
+                self.repique_images[state] = placeholder
+                continue
+
+            if image.get_height() <= 0:
+                self.repique_images[state] = image
+                continue
+
+            scale_ratio = target_height / image.get_height()
+            target_width = max(1, int(image.get_width() * scale_ratio))
+            scaled = pygame.transform.smoothscale(image, (target_width, target_height))
+            self.repique_images[state] = scaled
+
+        if "neutro" not in self.repique_images:
+            placeholder = pygame.Surface((target_height, target_height), pygame.SRCALPHA)
+            placeholder.fill((0, 0, 0, 0))
+            self.repique_images["neutro"] = placeholder
+
+        self.repique_anchor_top = self.lane_top - ((target_height - lane_height) // 2)
+        self.repique_anchor_right = self.hit_area_x - self.hit_tolerance - 20
+
+    def _render_repique(self, surface: pygame.Surface) -> None:
+        sprite = self.repique_images.get(self.repique_state) or self.repique_images.get("neutro")
+        if not sprite:
+            return
+
+        # Reposiciona caso a geometria da lane mude (ex: redimensionamento).
+        lane_height = self.lane_bottom - self.lane_top
+        target_height = max(1, self.repique_target_height)
+        self.repique_anchor_top = self.lane_top - ((target_height - lane_height) // 2)
+        self.repique_anchor_right = self.hit_area_x - self.hit_tolerance - 20
+
+        rect = sprite.get_rect()
+        rect.top = self.repique_anchor_top
+        rect.right = self.repique_anchor_right
+        surface.blit(sprite, rect)
+
+    def _set_repique_state(self, state: str) -> None:
+        new_state = state if state in self.repique_images else "neutro"
+        self.repique_state = new_state
+        self.repique_timer = 0.0 if new_state == "neutro" else 0.5
+
     def _update_note_animations(self, dt: float) -> None:
         to_remove = []
         for note in self.notes:
@@ -191,6 +263,7 @@ class GameplayScene(BaseScene):
         self.render_lane(surface)
         self.render_hit_area(surface)
         self.render_notes(surface)
+        self._render_repique(surface)
         self.render_stats(surface)
 
         overlay_alpha = 0
@@ -301,6 +374,7 @@ class GameplayScene(BaseScene):
         if active_note is None:
             self.misses += 1
             self._trigger_flash(COLOR_MISS)
+            self._set_repique_state("erro")
             print(f"MISS! Nenhuma nota ativa para {note_type}")
             return False
 
@@ -310,6 +384,7 @@ class GameplayScene(BaseScene):
         if distance > self.hit_tolerance * 2:
             self._trigger_flash(COLOR_MISS)
             self.misses += 1
+            self._set_repique_state("erro")
             print(f"MISS! Nota ativa fora da hit_area")
             return False
 
@@ -323,6 +398,7 @@ class GameplayScene(BaseScene):
                 self.score += 50
                 active_note.result = 'good'
                 self._trigger_flash(COLOR_GOOD_HIT)
+                self._set_repique_state("bom")
                 self._start_fade_animation(active_note)
                 print(f"GOOD! Tipo: {note_type}")
             else:
@@ -330,6 +406,7 @@ class GameplayScene(BaseScene):
                 self.score += 100
                 active_note.result = 'perfect'
                 self._trigger_flash(COLOR_PERFECT_HIT)
+                self._set_repique_state("perfeito")
                 self._start_fade_animation(active_note)
                 print(f"HIT! Tipo: {note_type}")
 
@@ -341,6 +418,7 @@ class GameplayScene(BaseScene):
             active_note.key_mistaken = True # Registra que a nota já teve sua tecla confundida
             self.misses += 1
             self._trigger_flash(COLOR_MISS)
+            self._set_repique_state("erro")
             print(f"MISS! Esperava {active_note.note_type}, recebeu {note_type}")
             return False
     
@@ -395,6 +473,13 @@ class GameplayScene(BaseScene):
 
     def update(self, dt: float) -> None:
         """Atualiza posição das notas e gerencia fases da partida."""
+        if self.repique_timer > 0:
+            self.repique_timer -= dt
+            if self.repique_timer <= 0:
+                self.repique_timer = 0
+                if self.repique_state != "neutro":
+                    self.repique_state = "neutro"
+
         if self.state == "playing":
             if self.start_time is None:
                 return
@@ -424,6 +509,7 @@ class GameplayScene(BaseScene):
                         self.misses += 1
                         note.result = 'miss'
                         self._trigger_flash(COLOR_MISS)
+                        self._set_repique_state("erro")
                         self._start_miss_animation(note)
                         print(f"MISS! Nota passou: {note.note_type}")
 
