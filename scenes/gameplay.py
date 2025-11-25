@@ -3,8 +3,8 @@ import csv
 
 from entities.Notes.Note import Note
 from .base import BaseScene
-from .music_select import MusicSelectScene
 from utils.constants import COLOR_BACKGROUND, COLOR_YELLOW_BACKGROUND, COLOR_PINK_NOTE, COLOR_BLUE_NOTE, COLOR_GREEN_NOTE, COLOR_YELLOW_NOTE
+from .music_select import MusicSelectScene
 
 class GameplayScene(BaseScene):
     """Cena onde ocorre toda a jogabilidade"""
@@ -89,6 +89,22 @@ class GameplayScene(BaseScene):
         except pygame.error as e:
             print(f"Erro ao carregar música: {e}")
 
+    def spawn_note(self, note: Note) -> None:
+        """Cria uma nova nota fora da tela à direita"""
+        width = self.app.screen.get_width()
+        note.x = width + self.note_radius # Posição inicial fora da tela
+        note.y = self.lane_bottom - 100
+        note.spawned = True
+        note.active = (len(self.notes) == 0)
+        self.notes.append(note)
+
+    def _activate_next_note(self) -> None:
+        """Ativa a próxima nota com base no hit_time"""
+        if self.notes:
+            # Ordena por hit_time
+            next = min(self.notes, key=lambda n: n.hit_time)
+            next.active = True
+
     def render(self, surface: pygame.Surface) -> None:
         """Renderiza layout da cena"""
         surface.fill(COLOR_YELLOW_BACKGROUND)
@@ -116,12 +132,12 @@ class GameplayScene(BaseScene):
         pygame.draw.circle(hit_surf, (255, 255, 255, 160), (self.hit_tolerance, self.hit_tolerance), 2 * self.hit_tolerance // 3)
         surface.blit(hit_surf, (self.hit_area_x - self.hit_tolerance, hit_center_y - self.hit_tolerance))
     
-    def render_note(self, surface: pygame.Surface, note_center_x: int, note_center_y: int, note_type: str) -> None:
+    def render_note(self, surface: pygame.Surface, note_center_x: int, note_center_y: int, note: Note) -> None:
         """Desenha uma nota com base no seu tipo"""
-        if note_type == "g": note_color = COLOR_PINK_NOTE
-        elif note_type == "a": note_color = COLOR_BLUE_NOTE
-        elif note_type == "m": note_color = COLOR_YELLOW_NOTE
-        elif note_type == "f": note_color = COLOR_GREEN_NOTE
+        if note.note_type == "g": note_color = COLOR_PINK_NOTE
+        elif note.note_type == "a": note_color = COLOR_BLUE_NOTE
+        elif note.note_type == "m": note_color = COLOR_YELLOW_NOTE
+        elif note.note_type == "f": note_color = COLOR_GREEN_NOTE
 
         note_surf = pygame.Surface((self.note_radius * 2, self.note_radius * 2), pygame.SRCALPHA)
         pygame.draw.circle(note_surf, note_color, (self.note_radius, self.note_radius), self.note_radius)
@@ -130,7 +146,7 @@ class GameplayScene(BaseScene):
     def render_notes(self, surface: pygame.Surface) -> None:
         """Renderiza todas as notas ativas"""
         for note in self.notes:
-            self.render_note(surface, int(note["x"]), note["y"], note["type"])
+            self.render_note(surface, int(note.x), note.y, note)
 
     def render_stats(self, surface: pygame.Surface) -> None:
         """Renderiza contador de acertos e erros"""
@@ -140,35 +156,17 @@ class GameplayScene(BaseScene):
         surface.blit(hits_text, (20, 20))
         surface.blit(misses_text, (20, 60))
 
-    def spawn_note(self, note_type: str) -> None:
-        """Cria uma nova nota fora da tela à direita"""
-        width = self.app.screen.get_width()
-        new_note = {
-            "x": width + self.note_radius,
-            "y": self.lane_bottom - 100,
-            "type": note_type,
-            "active": len(self.notes) == 0
-        }
-        self.notes.append(new_note)
-
-    def _activate_next_note(self) -> None:
-        """Ativa a próxima nota (a mais próxima da hit_area)"""
-        if self.notes:
-            # Ordena por posição x (mais próxima à esquerda é a próxima)
-            closest = min(self.notes, key=lambda n: n["x"])
-            closest["active"] = True
-
     def check_hit(self, note_type: str) -> bool:
         """Verifica acerto apenas na nota marcada como active."""
         # Busca a nota ativa
-        active_note = next((n for n in self.notes if n.get("active", False)), None)
+        active_note = next((n for n in self.notes if n.active), None)
         
         if active_note is None:
             self.misses += 1
             print(f"MISS! Nenhuma nota ativa para {note_type}")
             return False
 
-        distance = abs(active_note["x"] - self.hit_area_x)
+        distance = abs(active_note.x - self.hit_area_x)
 
         # Verifica se está dentro da janela de acerto
         if distance > self.hit_tolerance:
@@ -177,7 +175,7 @@ class GameplayScene(BaseScene):
             return False
 
         # Verifica o tipo da nota
-        if active_note["type"] == note_type:
+        if active_note.note_type == note_type:
             self.notes.remove(active_note)
             self.hits += 1
             print(f"HIT! Tipo: {note_type}")
@@ -185,7 +183,7 @@ class GameplayScene(BaseScene):
             return True
         else:
             self.misses += 1
-            print(f"MISS! Esperava {active_note['type']}, recebeu {note_type}")
+            print(f"MISS! Esperava {active_note.note_type}, recebeu {note_type}")
             return False
     
     def _can_trigger(self, key: int) -> bool:
@@ -233,20 +231,20 @@ class GameplayScene(BaseScene):
         # Spawna notas do beatmap no momento certo
         for note_data in self.note_queue:
             if not note_data.spawned and music_time >= note_data.spawn_time:
-                self.spawn_note(note_data.note_type)  # Passa o tipo da nota
+                self.spawn_note(note_data)  # Passa o objeto da nota
                 note_data.spawned = True
         
         # Move todas as notas
         for note in self.notes:
-            note["x"] -= self.note_speed * dt
+            note.x -= self.note_speed * dt
         
         # Verifica notas que passaram da hit area (erros)
         notes_to_remove = []
         for note in self.notes:
-            if note["x"] < (self.hit_area_x - self.hit_tolerance):
+            if note.x < (self.hit_area_x - self.hit_tolerance):
                 notes_to_remove.append(note)
                 self.misses += 1
-                print(f"MISS! Nota passou: {note['type']}")
+                print(f"MISS! Nota passou: {note.note_type}")
         
         # Remove notas perdidas
         for note in notes_to_remove:

@@ -3,7 +3,6 @@
 import pygame
 import pathlib
 
-from .gameplay import GameplayScene
 from .base import BaseScene
 from entities.Music import Music
 from utils.buttons import Button, ButtonTheme
@@ -223,6 +222,7 @@ class MusicSelectScene(BaseScene):
         pygame.mixer.music.stop()
         song = self.songs[self.selected_index]
         
+        from .gameplay import GameplayScene # importação tardia evitando importação circular
         self.app.change_scene(GameplayScene(self.app, song))  # Passa dados da música
 
     def _on_home_selected(self) -> None:
