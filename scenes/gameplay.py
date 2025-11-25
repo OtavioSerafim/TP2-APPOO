@@ -1,5 +1,6 @@
 import pygame
 import csv
+from datetime import datetime
 
 from entities.Notes.Note import Note
 from entities.Notes.agudo.Agudo import Agudo
@@ -7,7 +8,20 @@ from entities.Notes.grave.Grave import Grave
 from entities.Notes.flam.Flam import Flam
 from entities.Notes.mao.Mao import Mao
 from .base import BaseScene
-from utils.constants import COLOR_BACKGROUND, COLOR_YELLOW_BACKGROUND, COLOR_PINK_NOTE, COLOR_BLUE_NOTE, COLOR_GREEN_NOTE, COLOR_YELLOW_NOTE, COLOR_PERFECT_HIT, COLOR_GOOD_HIT, COLOR_MISS
+from utils.constants import (
+    COLOR_BACKGROUND,
+    COLOR_YELLOW_BACKGROUND,
+    COLOR_PINK_NOTE,
+    COLOR_BLUE_NOTE,
+    COLOR_GREEN_NOTE,
+    COLOR_YELLOW_NOTE,
+    COLOR_PERFECT_HIT,
+    COLOR_GOOD_HIT,
+    COLOR_MISS,
+    COLOR_PRIMARY,
+    COLOR_TEXT,
+    COLOR_TEXT_MUTED,
+)
 from .music_select import MusicSelectScene
 
 class GameplayScene(BaseScene):
@@ -29,9 +43,14 @@ class GameplayScene(BaseScene):
         self.hits = 0
         self.goods = 0
         self.misses = 0
+        self.bad_hits = 0
+        self.score = 0
         
         # Fontes para UI
         self.stats_font = pygame.font.Font(None, 36)
+        self.results_title_font = pygame.font.Font(None, 72)
+        self.results_font = pygame.font.Font(None, 40)
+        self.results_hint_font = pygame.font.Font(None, 32)
 
         # Inicializa posições da lane
         height = self.app.screen.get_height()
@@ -49,6 +68,19 @@ class GameplayScene(BaseScene):
         self.flash_duration_ms = 180
         self.hit_flash_timer_ms = 0
         self.hit_flash_color = None
+
+        # Estados de término
+        self.state = "playing"
+        self.end_fade_duration = 2.0
+        self.end_fade_elapsed = 0.0
+        self.end_overlay_alpha = 0
+        self.exit_fade_duration = 2.0
+        self.exit_fade_elapsed = 0.0
+        self.exit_overlay_alpha = 0
+        self.results_visible = False
+        self.results_text_alpha = 0
+        self.results_recorded = False
+        self.results_message = ""
         
         self._load_beatmap()
         self._start_music()
@@ -161,6 +193,25 @@ class GameplayScene(BaseScene):
         self.render_notes(surface)
         self.render_stats(surface)
 
+        overlay_alpha = 0
+        if self.state == "ending_fade":
+            overlay_alpha = self.end_overlay_alpha
+        elif self.state in ("show_results", "leaving"):
+            overlay_alpha = 255
+
+        if overlay_alpha > 0:
+            overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, overlay_alpha))
+            surface.blit(overlay, (0, 0))
+
+        if self.state == "leaving" and self.exit_overlay_alpha > 0:
+            exit_overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+            exit_overlay.fill((0, 0, 0, self.exit_overlay_alpha))
+            surface.blit(exit_overlay, (0, 0))
+
+        if self.results_visible:
+            self._render_results(surface)
+
     def render_lane(self, surface: pygame.Surface) -> None:
         """Desenha a lane em que percorrem as notas"""
         width = surface.get_width()
@@ -214,6 +265,34 @@ class GameplayScene(BaseScene):
         surface.blit(goods_text, (20, 60))
         surface.blit(misses_text, (20, 100))
 
+    def _render_results(self, surface: pygame.Surface) -> None:
+        if self.results_text_alpha <= 0:
+            return
+
+        width, height = surface.get_size()
+        center_x = width // 2
+        current_y = int(height * 0.25)
+
+        def _blit_line(font: pygame.font.Font, text: str, color: tuple[int, int, int], gap: int = 16) -> None:
+            nonlocal current_y
+            rendered = font.render(text, True, color)
+            rendered.set_alpha(self.results_text_alpha)
+            rect = rendered.get_rect(centerx=center_x, y=current_y)
+            surface.blit(rendered, rect)
+            current_y = rect.bottom + gap
+
+        _blit_line(self.results_title_font, "Música concluída!", COLOR_PRIMARY, gap=28)
+        _blit_line(self.results_font, f"Pontuação: {self.score}", COLOR_TEXT)
+        _blit_line(self.results_font, f"Perfeitas: {self.hits}", COLOR_TEXT)
+        _blit_line(self.results_font, f"Boas: {self.goods}", COLOR_TEXT)
+        _blit_line(self.results_font, f"Erros: {self.misses}", COLOR_TEXT)
+
+        if self.results_message:
+            _blit_line(self.results_hint_font, self.results_message, COLOR_PRIMARY, gap=28)
+
+        hint_text = "Pressione Enter para voltar"
+        _blit_line(self.results_hint_font, hint_text, COLOR_TEXT_MUTED, gap=0)
+
     def check_hit(self, note_type: str) -> bool:
         """Verifica acerto apenas na nota marcada como active."""
         # Busca a nota ativa
@@ -241,12 +320,14 @@ class GameplayScene(BaseScene):
             # Verifica qualidade do acerto
             if distance > perfect_tolerance:
                 self.goods += 1
+                self.score += 50
                 active_note.result = 'good'
                 self._trigger_flash(COLOR_GOOD_HIT)
                 self._start_fade_animation(active_note)
                 print(f"GOOD! Tipo: {note_type}")
             else:
                 self.hits += 1
+                self.score += 100
                 active_note.result = 'perfect'
                 self._trigger_flash(COLOR_PERFECT_HIT)
                 self._start_fade_animation(active_note)
@@ -273,10 +354,19 @@ class GameplayScene(BaseScene):
 
     def handle_event(self, event: pygame.event.Event) -> None:
         # Timer para iniciar a música
-        if event.type == pygame.USEREVENT + 1:
+        if event.type == pygame.USEREVENT + 1 and self.state == "playing":
             pygame.mixer.music.play()
             print("Música iniciada!")
-        
+            return
+
+        if self.state == "show_results":
+            if event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                self._start_exit_fade()
+            return
+
+        if self.state == "leaving" or self.state == "ending_fade":
+            return
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 pygame.mixer.music.stop()
@@ -304,49 +394,142 @@ class GameplayScene(BaseScene):
                 self.check_hit("m")
 
     def update(self, dt: float) -> None:
-        """Atualiza posição das notas e spawna baseado no timer real"""
-        if self.start_time is None:
-            return
-        
-        # Atualiza flash
-        if self.hit_flash_timer_ms > 0:
-            self.hit_flash_timer_ms -= int(dt * 1000)
-            if self.hit_flash_timer_ms <= 0:
-                self.hit_flash_timer_ms = 0
-                self.hit_flash_color = None
-        
-        # Calcula tempo decorrido usando pygame.time.get_ticks()
-        current_time = pygame.time.get_ticks()
-        music_time = (current_time - self.start_time) / 1000.0  # Converte ms para segundos
-        
-        # Spawna notas do beatmap no momento certo
-        for note_data in self.note_queue:
-            if not note_data.spawned and music_time >= note_data.spawn_time:
-                self.spawn_note(note_data)  # Passa o objeto da nota
-                note_data.spawned = True
-        
-        # Move todas as notas
-        for note in self.notes:
-            note.x -= self.note_speed * dt
-        
-        # Verifica notas que passaram da hit area (erros)
-        notes_to_remove = []
-        for note in [n for n in self.notes if n.state is None]:
-            if note.x < (self.hit_area_x - self.hit_tolerance):
-                notes_to_remove.append(note)
-                if not note.key_mistaken:
-                    self.misses += 1
-                    note.result = 'miss'
-                    self._trigger_flash(COLOR_MISS)
-                    self._start_miss_animation(note)
-                    print(f"MISS! Nota passou: {note.note_type}")
-        
-        # Atualiza animações
-        self._update_note_animations(dt)
+        """Atualiza posição das notas e gerencia fases da partida."""
+        if self.state == "playing":
+            if self.start_time is None:
+                return
 
-        # Remove notas perdidas
-        for note in notes_to_remove:
-            self.notes.remove(note)
-            if any(n.active for n in self.notes if n.state is None) is False:
-                self._activate_next_note()
+            if self.hit_flash_timer_ms > 0:
+                self.hit_flash_timer_ms -= int(dt * 1000)
+                if self.hit_flash_timer_ms <= 0:
+                    self.hit_flash_timer_ms = 0
+                    self.hit_flash_color = None
+
+            current_time = pygame.time.get_ticks()
+            music_time = (current_time - self.start_time) / 1000.0
+
+            for note_data in self.note_queue:
+                if not note_data.spawned and music_time >= note_data.spawn_time:
+                    self.spawn_note(note_data)
+                    note_data.spawned = True
+
+            for note in self.notes:
+                note.x -= self.note_speed * dt
+
+            notes_to_remove = []
+            for note in [n for n in self.notes if n.state is None]:
+                if note.x < (self.hit_area_x - self.hit_tolerance):
+                    notes_to_remove.append(note)
+                    if not note.key_mistaken:
+                        self.misses += 1
+                        note.result = 'miss'
+                        self._trigger_flash(COLOR_MISS)
+                        self._start_miss_animation(note)
+                        print(f"MISS! Nota passou: {note.note_type}")
+
+            self._update_note_animations(dt)
+
+            for note in notes_to_remove:
+                self.notes.remove(note)
+                if any(n.active for n in self.notes if n.state is None) is False:
+                    self._activate_next_note()
+
+            if self._has_finished_song():
+                self._begin_end_sequence()
+
+            return
+
+        if self.state == "ending_fade":
+            self._update_end_fade(dt)
+        elif self.state == "leaving":
+            self._update_exit_fade(dt)
                 
+    def _has_finished_song(self) -> bool:
+        if self.notes:
+            return False
+        if not self.note_queue:
+            return True
+        return all(getattr(note, "spawned", False) for note in self.note_queue)
+
+    def _begin_end_sequence(self) -> None:
+        if self.state != "playing":
+            return
+        self.state = "ending_fade"
+        self.end_fade_elapsed = 0.0
+        self.end_overlay_alpha = 0
+        pygame.mixer.music.fadeout(int(self.end_fade_duration * 1000))
+        pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+
+    def _update_end_fade(self, dt: float) -> None:
+        self.end_fade_elapsed += dt
+        progress = min(1.0, self.end_fade_elapsed / self.end_fade_duration)
+        self.end_overlay_alpha = int(255 * progress)
+        if progress >= 1.0:
+            self._transition_to_results()
+
+    def _transition_to_results(self) -> None:
+        if self.state == "show_results":
+            return
+        pygame.mixer.music.stop()
+        self.state = "show_results"
+        self.end_overlay_alpha = 255
+        self.results_visible = True
+        self.results_text_alpha = 255
+        if not self.results_recorded:
+            self._record_play()
+            self.results_recorded = True
+
+    def _record_play(self) -> None:
+        self.score = self.hits * 100 + self.goods * 50
+        player = getattr(self.app, "active_player", None)
+        if player is None:
+            self.results_message = "Nenhum jogador ativo – resultado não salvo."
+            return
+
+        try:
+            player_id = int(player["id"])
+        except (KeyError, TypeError, ValueError):
+            self.results_message = "Jogador inválido – resultado não salvo."
+            return
+
+        try:
+            play_model = self.app.models.play
+        except Exception as exc:  # noqa: BLE001
+            print(f"Erro ao acessar modelo Play: {exc}")
+            self.results_message = "Modelo de partidas indisponível."
+            return
+
+        payload = {
+            "played_at": datetime.utcnow(),
+            "music_name": getattr(self.song_data, "title", "Desconhecida"),
+            "score": self.score,
+            "player_id": player_id,
+            "errors": self.misses,
+            "perfect_hits": self.hits,
+            "good_hits": self.goods,
+            "bad_hits": self.bad_hits,
+        }
+
+        try:
+            play_model.create(payload)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Erro ao salvar partida: {exc}")
+            self.results_message = "Erro ao salvar partida."
+        else:
+            self.results_message = "Partida registrada com sucesso!"
+
+    def _start_exit_fade(self) -> None:
+        if self.state != "show_results":
+            return
+        self.state = "leaving"
+        self.exit_fade_elapsed = 0.0
+        self.exit_overlay_alpha = 0
+        self.results_text_alpha = 255
+
+    def _update_exit_fade(self, dt: float) -> None:
+        self.exit_fade_elapsed += dt
+        progress = min(1.0, self.exit_fade_elapsed / self.exit_fade_duration)
+        self.exit_overlay_alpha = int(255 * progress)
+        self.results_text_alpha = int(255 * (1 - progress))
+        if progress >= 1.0:
+            self.app.change_scene(MusicSelectScene(self.app))

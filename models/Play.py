@@ -117,5 +117,43 @@ class Play(Model):
 		self.cursor.execute(query, (limit,))
 		return self.cursor.fetchall()
 
+	def leaderboard_for_music(self, music_name: str, limit: int = 10) -> Iterable[Any]:
+		"""Retorna as melhores partidas para uma música específica."""
+		if not isinstance(music_name, str) or not music_name.strip():
+			raise ValueError("Informe um nome de música válido.")
+		limit = _ensure_int(limit, "limit", minimum=1)
+		query = (
+			"SELECT "
+			"plays.id, plays.played_at, plays.music_name, plays.score, plays.player_id, "
+			"plays.errors, plays.perfect_hits, plays.good_hits, plays.bad_hits, "
+			"COALESCE(player.name, 'Jogador #' || plays.player_id) AS player_name "
+			"FROM plays "
+			"LEFT JOIN player ON player.id = plays.player_id "
+			"WHERE plays.music_name = ? "
+			"ORDER BY plays.score DESC, plays.played_at ASC "
+			"LIMIT ?"
+		)
+		self.cursor.execute(query, (music_name.strip(), limit))
+		return self.cursor.fetchall()
+
+	def best_for_player_and_music(self, player_id: int, music_name: str) -> Optional[Any]:
+		"""Retorna a melhor partida de um jogador para a música informada."""
+		player_id = _ensure_int(player_id, "player_id", minimum=1)
+		if not isinstance(music_name, str) or not music_name.strip():
+			raise ValueError("Informe um nome de música válido.")
+		query = (
+			"SELECT "
+			"plays.id, plays.played_at, plays.music_name, plays.score, plays.player_id, "
+			"plays.errors, plays.perfect_hits, plays.good_hits, plays.bad_hits, "
+			"COALESCE(player.name, 'Jogador #' || plays.player_id) AS player_name "
+			"FROM plays "
+			"LEFT JOIN player ON player.id = plays.player_id "
+			"WHERE plays.music_name = ? AND plays.player_id = ? "
+			"ORDER BY plays.score DESC, plays.played_at ASC "
+			"LIMIT 1"
+		)
+		self.cursor.execute(query, (music_name.strip(), player_id))
+		return self.cursor.fetchone()
+
 
 __all__ = ["Play"]
